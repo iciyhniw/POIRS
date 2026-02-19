@@ -3,6 +3,7 @@ import random
 import time
 import os
 
+
 class MaxSubarraySolver:
     """
     Клас для розв'язання задачі пошуку підмасиву з максимальною сумою.
