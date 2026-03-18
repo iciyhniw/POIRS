@@ -6,6 +6,10 @@
       <list>
         <option value="$PROJECT_DIR$/LR2/media-service/pom.xml" />
         <option value="$PROJECT_DIR$/LR3/media-service/pom.xml" />
+        <option value="$PROJECT_DIR$/LR4/content-service/pom.xml" />
+        <option value="$PROJECT_DIR$/LR4/interaction-service/pom.xml" />
+        <option value="$PROJECT_DIR$/LR4/media-service-monolith/pom.xml" />
+        <option value="$PROJECT_DIR$/LR4/moderation-service/pom.xml" />
       </list>
     </option>
   </component>

@@ -1,0 +1,72 @@
+### 1. Create author
+POST http://localhost:8081/api/v1/authors
+Content-Type: application/json
+
+{
+  "username": "Ivan Franko",
+  "email": "ivan@example.com"
+}
+
+### 2. Create category
+POST http://localhost:8081/api/v1/categories
+Content-Type: application/json
+
+{
+  "name": "Technology"
+}
+
+### 3. Create content
+POST http://localhost:8081/api/v1/contents
+Content-Type: application/json
+
+{
+  "title": "Microservices in Media Platform",
+  "body": "This content was created in content-service.",
+  "authorId": 1,
+  "categoryId": 1
+}
+
+### 4. Add comment through interaction-service
+POST http://localhost:8082/api/v1/comments
+Content-Type: application/json
+
+{
+  "contentId": 1,
+  "authorId": 2,
+  "text": "Interesting article"
+}
+
+### 5. Add rating through interaction-service
+POST http://localhost:8082/api/v1/contents/1/ratings
+Content-Type: application/json
+
+{
+  "authorId": 2,
+  "score": 5
+}
+
+### 6. Check content after rating sync
+GET http://localhost:8081/api/v1/contents/1
+
+### 7. Moderate through moderation-service
+POST http://localhost:8083/api/v1/contents/1/moderations
+Content-Type: application/json
+
+{
+  "resolution": "APPROVED",
+  "reason": "Content meets moderation rules"
+}
+
+### 8. Check content after moderation sync
+GET http://localhost:8081/api/v1/contents/1
+
+### 9. Failure scenario
+### Stop content-service, then run:
+POST http://localhost:8082/api/v1/comments
+Content-Type: application/json
+
+{
+  "contentId": 1,
+  "authorId": 3,
+  "text": "This request should fail when content-service is down"
+}
