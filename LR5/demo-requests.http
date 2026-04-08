@@ -1,0 +1,272 @@
+### LR5 Demo Scenario
+### Before running these requests:
+### 1. Start the system:
+###    docker compose up --build
+### 2. Open this file in IntelliJ IDEA HTTP Client.
+### 3. Run requests from top to bottom.
+### 4. For cache demonstration, watch the response time shown by IntelliJ for:
+###    - "First GET by id - cache miss"
+###    - "Second GET by id - cache hit"
+### 5. After update/moderation/rating change, run the next GET and show that cache is rebuilt.
+
+### ============================================================================
+### 1. Create author
+### ============================================================================
+# @name createAuthor
+POST http://localhost:8081/api/v1/authors
+Content-Type: application/json
+
+{
+  "username": "Ivan Franko",
+  "email": "ivan@example.com"
+}
+
+> {% 
+client.test("Author created", function() {
+  client.assert(response.status === 201, "Expected HTTP 201");
+});
+client.global.set("authorId", response.body.id);
+%}
+
+### ============================================================================
+### 2. Create category
+### ============================================================================
+# @name createCategory
+POST http://localhost:8081/api/v1/categories
+Content-Type: application/json
+
+{
+  "name": "Technology"
+}
+
+> {% 
+client.test("Category created", function() {
+  client.assert(response.status === 201, "Expected HTTP 201");
+});
+client.global.set("categoryId", response.body.id);
+%}
+
+### ============================================================================
+### 3. Create content
+### ============================================================================
+# @name createContent
+POST http://localhost:8081/api/v1/contents
+Content-Type: application/json
+
+{
+  "title": "Microservices in Media Platform",
+  "body": "This content was created in content-service.",
+  "authorId": {{authorId}},
+  "categoryId": {{categoryId}}
+}
+
+> {% 
+client.test("Content created", function() {
+  client.assert(response.status === 201, "Expected HTTP 201");
+});
+client.global.set("contentId", response.body.id);
+%}
+
+### ============================================================================
+### 4. First GET by id - cache miss
+### Expectation:
+### - this request is slower
+### - data is loaded from PostgreSQL and put into Redis
+### ============================================================================
+# @name firstGetById
+GET http://localhost:8081/api/v1/contents/{{contentId}}
+
+> {% 
+client.test("First GET returned content", function() {
+  client.assert(response.status === 200, "Expected HTTP 200");
+  client.assert(response.body.id == client.global.get("contentId"), "Unexpected content id");
+});
+%}
+
+### ============================================================================
+### 5. Second GET by id - cache hit
+### Expectation:
+### - this request is faster than the previous one
+### - data is returned from Redis cache
+### ============================================================================
+# @name secondGetById
+GET http://localhost:8081/api/v1/contents/{{contentId}}
+
+> {% 
+client.test("Second GET returned content", function() {
+  client.assert(response.status === 200, "Expected HTTP 200");
+  client.assert(response.body.id == client.global.get("contentId"), "Unexpected content id");
+});
+%}
+
+### ============================================================================
+### 6. Add comment through interaction-service
+### Demonstrates that microservices work together inside containers
+### ============================================================================
+# @name createComment
+POST http://localhost:8082/api/v1/comments
+Content-Type: application/json
+
+{
+  "contentId": {{contentId}},
+  "authorId": 2,
+  "text": "Interesting article"
+}
+
+> {% 
+client.test("Comment created", function() {
+  client.assert(response.status === 201, "Expected HTTP 201");
+});
+%}
+
+### ============================================================================
+### 7. Add rating through interaction-service
+### This updates averageRating in content-service and should evict cache
+### ============================================================================
+# @name createRating
+POST http://localhost:8082/api/v1/contents/{{contentId}}/ratings
+Content-Type: application/json
+
+{
+  "authorId": 2,
+  "score": 5
+}
+
+> {% 
+client.test("Rating created", function() {
+  client.assert(response.status === 201 || response.status === 200, "Expected HTTP 200/201");
+});
+%}
+
+### ============================================================================
+### 8. GET after rating update - cache miss again
+### Expectation:
+### - request becomes slower again because cache was invalidated
+### - response should contain updated averageRating
+### ============================================================================
+# @name getAfterRatingUpdate
+GET http://localhost:8081/api/v1/contents/{{contentId}}
+
+> {% 
+client.test("GET after rating update returned content", function() {
+  client.assert(response.status === 200, "Expected HTTP 200");
+});
+%}
+
+### ============================================================================
+### 9. Moderate through moderation-service
+### This updates content status and should evict cache again
+### ============================================================================
+# @name moderateContent
+POST http://localhost:8083/api/v1/contents/{{contentId}}/moderations
+Content-Type: application/json
+
+{
+  "resolution": "APPROVED",
+  "reason": "Content meets moderation rules"
+}
+
+> {% 
+client.test("Moderation created", function() {
+  client.assert(response.status === 201 || response.status === 200, "Expected HTTP 200/201");
+});
+%}
+
+### ============================================================================
+### 10. GET after moderation - cache miss again
+### Expectation:
+### - request is slower again
+### - response should contain updated status
+### ============================================================================
+# @name getAfterModeration
+GET http://localhost:8081/api/v1/contents/{{contentId}}
+
+> {% 
+client.test("GET after moderation returned content", function() {
+  client.assert(response.status === 200, "Expected HTTP 200");
+});
+%}
+
+### ============================================================================
+### 11. Update content directly in content-service
+### This should evict cache for the same id
+### ============================================================================
+# @name updateContent
+PUT http://localhost:8081/api/v1/contents/{{contentId}}
+Content-Type: application/json
+
+{
+  "title": "Updated title for cache test",
+  "body": "Updated body after cache invalidation.",
+  "authorId": {{authorId}},
+  "categoryId": {{categoryId}},
+  "status": "PUBLISHED",
+  "averageRating": 5.0
+}
+
+> {% 
+client.test("Content updated", function() {
+  client.assert(response.status === 200, "Expected HTTP 200");
+});
+%}
+
+### ============================================================================
+### 12. GET after direct update - cache miss again
+### Expectation:
+### - slower because cache was cleared
+### - response should contain updated title/body
+### ============================================================================
+# @name getAfterDirectUpdate
+GET http://localhost:8081/api/v1/contents/{{contentId}}
+
+> {% 
+client.test("GET after direct update returned content", function() {
+  client.assert(response.status === 200, "Expected HTTP 200");
+  client.assert(response.body.title === "Updated title for cache test", "Title was not updated");
+});
+%}
+
+### ============================================================================
+### 13. Immediate repeated GET - cache hit again
+### Expectation:
+### - faster than previous request
+### ============================================================================
+# @name repeatedGetAfterUpdate
+GET http://localhost:8081/api/v1/contents/{{contentId}}
+
+> {% 
+client.test("Repeated GET after update returned content", function() {
+  client.assert(response.status === 200, "Expected HTTP 200");
+});
+%}
+
+### ============================================================================
+### 14. Optional: check all content items
+### ============================================================================
+# @name getAllContents
+GET http://localhost:8081/api/v1/contents
+
+> {% 
+client.test("List of content returned", function() {
+  client.assert(response.status === 200, "Expected HTTP 200");
+});
+%}
+
+### ============================================================================
+### 15. Optional failure scenario
+### To demonstrate service dependency:
+### 1. Stop content-service container:
+###    docker stop lr5-content-service
+### 2. Run the request below
+### 3. interaction-service should return 503 Service Unavailable
+### ============================================================================
+# @name failureScenario
+POST http://localhost:8082/api/v1/comments
+Content-Type: application/json
+
+{
+  "contentId": {{contentId}},
+  "authorId": 3,
+  "text": "This request should fail when content-service is down"
+}
+
